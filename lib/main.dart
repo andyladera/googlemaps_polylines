@@ -1,8 +1,5 @@
 import 'package:flutter/material.dart';
 import 'package:google_maps_flutter/google_maps_flutter.dart';
-
-// 1. IMPORTAMOS NUESTRO REPOSITORIO Y MODELO
-//    (Usando el nombre de tu proyecto "googlemaps_polylines")
 import 'package:googlemaps_polylines/helpers/directions_repository.dart';
 import 'package:googlemaps_polylines/models/directions_model.dart';
 
@@ -39,19 +36,13 @@ class _MapScreenState extends State<MapScreen> {
   Marker? _origin;
   Marker? _destination;
 
-  // 2. INSTANCIAMOS EL REPOSITORIO
   late final DirectionsRepository _directionsRepository;
-
-  // 3. VARIABLE PARA GUARDAR LA INFORMACIÓN DE LA RUTA
   Directions? _info;
-
-  // 4. VARIABLE PARA GUARDAR LAS POLILÍNEAS
   Set<Polyline> _polylines = {};
 
   @override
   void initState() {
     super.initState();
-    // Inicializamos el repositorio
     _directionsRepository = DirectionsRepository();
   }
 
@@ -66,8 +57,22 @@ class _MapScreenState extends State<MapScreen> {
     return Scaffold(
       appBar: AppBar(
         title: const Text('Google Maps Directions'),
+        backgroundColor: Colors.white,
+        foregroundColor: Colors.black,
+        // 1. AÑADIMOS BOTONES AL APPBAR
+        actions: [
+          if (_origin != null)
+            TextButton(
+              onPressed: () => _animateToMarker(_origin!.position),
+              child: const Text('ORIGEN'),
+            ),
+          if (_destination != null)
+            TextButton(
+              onPressed: () => _animateToMarker(_destination!.position),
+              child: const Text('DESTINO'),
+            ),
+        ],
       ),
-      // 5. ENVOLVEMOS EL MAPA EN UN STACK
       body: Stack(
         alignment: Alignment.center,
         children: [
@@ -81,12 +86,8 @@ class _MapScreenState extends State<MapScreen> {
               if (_destination != null) _destination!,
             },
             onLongPress: _addMarker,
-            
-            // 6. AÑADIMOS LAS POLILÍNEAS AL MAPA
             polylines: _polylines,
           ),
-
-          // 7. MOSTRAMOS LA INFORMACIÓN DE RUTA (SI EXISTE)
           if (_info != null)
             Positioned(
               top: 20.0,
@@ -117,10 +118,16 @@ class _MapScreenState extends State<MapScreen> {
             ),
         ],
       ),
+      // 2. AÑADIMOS EL BOTÓN FLOTANTE
+      floatingActionButton: FloatingActionButton(
+        backgroundColor: Colors.white,
+        foregroundColor: Colors.black,
+        onPressed: _resetCamera,
+        child: const Icon(Icons.center_focus_strong),
+      ),
     );
   }
 
-  // 8. MODIFICAMOS _addMarker PARA QUE SEA 'async'
   Future<void> _addMarker(LatLng pos) async {
     if (_origin == null || (_origin != null && _destination != null)) {
       // Caso 1: Origen
@@ -132,8 +139,6 @@ class _MapScreenState extends State<MapScreen> {
           position: pos,
         );
         _destination = null;
-        
-        // Reseteamos la info y las polilíneas
         _info = null;
         _polylines.clear();
       });
@@ -148,27 +153,59 @@ class _MapScreenState extends State<MapScreen> {
         );
       });
 
-      // 9. ¡OBTENEMOS LAS DIRECCIONES!
       final directions = await _directionsRepository.getDirections(
         origin: _origin!.position,
         destination: pos,
       );
 
-      // 10. DIBUJAMOS LA POLILÍNEA
       if (directions != null) {
         setState(() {
-          _info = directions; // Guardamos la info
-          _polylines.clear(); // Limpiamos polilíneas anteriores
+          _info = directions;
+          _polylines.clear();
           _polylines.add(
             Polyline(
               polylineId: const PolylineId('overview_polyline'),
               color: Colors.red,
               width: 5,
-              points: directions.polylinePoints, // ¡Los puntos de la ruta!
+              points: directions.polylinePoints,
             ),
           );
         });
+
+        // 3. ¡ANIMAMOS LA CÁMARA A LOS LÍMITES DE LA RUTA!
+        //    (Ver transcripción, 9:05)
+        _mapController?.animateCamera(
+          CameraUpdate.newLatLngBounds(directions.bounds, 100.0), // 100.0 de padding
+        );
       }
+    }
+  }
+
+  // 4. NUEVO MÉTODO PARA CENTRAR CÁMARA (BOTONES APPBAR)
+  void _animateToMarker(LatLng position) {
+    _mapController?.animateCamera(
+      CameraUpdate.newCameraPosition(
+        CameraPosition(
+          target: position,
+          zoom: 14.5,
+          tilt: 50.0, // (Ver transcripción, 5:39)
+        ),
+      ),
+    );
+  }
+
+  // 5. NUEVO MÉTODO PARA RESETEAR CÁMARA (BOTÓN FLOTANTE)
+  void _resetCamera() {
+    if (_info != null) {
+      // Si hay ruta, centramos en la ruta
+      _mapController?.animateCamera(
+        CameraUpdate.newLatLngBounds(_info!.bounds, 100.0),
+      );
+    } else {
+      // Si no hay ruta, volvemos a la posición inicial
+      _mapController?.animateCamera(
+        CameraUpdate.newCameraPosition(_initialCameraPosition),
+      );
     }
   }
 }
